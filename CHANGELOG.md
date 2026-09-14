@@ -6,6 +6,79 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 <!-- next version -->
 
+## 1.18.0
+
+
+### New Components
+
+
+- `github-actions`: Add the `sync-assets` GitHub Action for syncing a directory of Dash0 asset YAML files, deleting assets removed since the last push (#277)
+  Wraps `dash0 apply --since <ref>`, deriving `<ref>` from the triggering event so a workflow does
+  not have to hand-write `github.event.before`'s corner cases itself.
+  
+  See `.github/actions/sync-assets/README.md` for the full reference.
+  
+
+- `time-series-aggregations`: Add the `time-series-aggregations` command group (alias `tsa`) and the `Dash0TimeSeriesAggregation` kind to `apply` (#281)
+  The five standard CRUD subcommands (`list`, `get`, `create`, `update`, `delete`) are available as
+  `dash0 time-series-aggregations <subcommand>` or `dash0 tsa <subcommand>`, and `apply` accepts
+  `kind: Dash0TimeSeriesAggregation` documents.
+  
+  Three behaviors differ from the other asset kinds:
+  
+  - `metadata.labels["dash0.com/origin"]` is mandatory and is the only upsert key. The API rejects an
+    aggregation without an origin, so there is no server-assigned-id fallback and no plain create: both
+    `create -f` and `apply -f` PUT to the origin, which is create-or-replace. A document without the
+    label fails before any API call, and during `apply`'s validation phase before any document in the
+    run is applied.
+  - Every endpoint requires the organization admin role, which is stricter than any other asset type.
+  - Origins are unique per organization while each aggregation belongs to exactly one dataset, so one
+    document cannot be applied to two datasets. The second dataset returns a 400; the CLI adds a hint
+    naming the organization-wide origin namespace and suggesting a per-dataset origin.
+  
+  A `dash0.com/id` in a document body is ignored by the API, so a definition exported with
+  `tsa get -o yaml` reapplies as a clean no-op.
+  
+
+- `slos`: Add `dash0 slos` commands to manage service level objectives (SLOs) as code (#206)
+  SLO documents use the OpenSLO v1 format (`apiVersion: openslo.com/v1`, `kind: SLO`) and are dataset-scoped via `--dataset`.
+  The commands support `create`, `list`, `get`, `update`, and `delete`, and SLOs can also be managed through `dash0 apply`.
+  SLO IDs are assigned by the server, so `metadata.labels["dash0.com/origin"]` is the upsert key: pin it in version control to make `apply` idempotent.
+  `slos get` and `slos delete` accept an origin or an ID, `slos list -o wide` and `-o csv` expose an `ORIGIN` column, and `slos get` prints `Origin:`.
+  
+
+
+### Enhancements
+
+
+- `dashboards, check-rules, views, synthetic-checks, recording-rules, notification-channels, spam-filters, teams, time-series-aggregations`: Make `update` speak with one voice about which asset it addresses (#281)
+  Every `update` command resolves the same thing — whether to address the asset named by the
+  positional argument, the document's `dash0.com/origin`, or its id — and each one used to answer
+  it with its own wording. The same mistake produced a different message depending on which asset
+  type you typed.
+  
+  The wording is now uniform, and more precise than what it replaces:
+  
+  - A missing identifier reads `no <asset> id given: pass one as an argument, or set the id in the
+    file`, and for the kinds that upsert by origin (spam filters, teams, time series aggregations)
+    `no <asset> origin or id given: pass one as an argument, or set
+    metadata.labels["dash0.com/origin"] in the file`.
+  - A positional argument that matches neither identifier names only the identifiers the document
+    actually carries, instead of reporting an empty one it never had.
+  
+  Only the message text changed; which asset each invocation resolves to is unchanged.
+  
+
+
+### Bug Fixes
+
+
+- `login`: Send `client_id` on OAuth token revocation requests (#249)
+  `dash0 logout`, `dash0 login` (on re-login), and `dash0 config profiles update --oauth=false` now
+  include the profile's client_id when revoking a refresh token, matching the authorization server's
+  requirement. Without it, revocation silently failed and the old refresh token stayed valid.
+  
+
 ## 1.17.0
 
 
